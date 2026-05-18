@@ -38109,10 +38109,15 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CarLaneTracker
   targetSpline: {fileID: 1145593133}
-  forwardSpeed: 5
-  maxSteerDeg: 45
+  forwardSpeed: 14
+  maxSteerDeg: 35
   steeringSpeed: 180
   wheelBase: 2.5
+  targetSpeed: 14
+  autoBrakeOnCurves: 1
+  minCurveSpeed: 5
+  speedChangeRate: 8
+  curvatureSensitivity: 0.04
   pid:
     mode: 2
     Kp: 1
@@ -38124,6 +38129,8 @@ MonoBehaviour:
   currentRefPoint: {x: 0, y: 0, z: 0}
   currentRefLateral: 0
   currentCarLateral: 0
+  currentCurvature: 0
+  currentActualSpeed: 0
 --- !u!114 &829536129
 MonoBehaviour:
   m_ObjectHideFlags: 0

@@ -12,10 +12,22 @@ public class CarLaneTracker : MonoBehaviour
     public SplineContainer targetSpline;
 
     [Header("Araç Ayarları (Kinematic Bicycle Model)")]
-    public float forwardSpeed = 8f;
+    public float forwardSpeed = 14f;
     public float maxSteerDeg = 35f;
     public float steeringSpeed = 180f; // derece/saniye (yumuşatma)
     public float wheelBase = 2.5f;
+
+    [Header("Hız Kontrol Sistemi")]
+    [Tooltip("Hedef hız (m/s) — UI slider'ından ayarlanır")]
+    public float targetSpeed = 14f;
+    [Tooltip("Viraj eğriliğine göre otomatik fren")]
+    public bool autoBrakeOnCurves = true;
+    [Tooltip("Minimum hız (virajlarda düşürülecek en alt değer)")]
+    public float minCurveSpeed = 5f;
+    [Tooltip("Hız değişim hızı (ivme/fren)")]
+    public float speedChangeRate = 8f;
+    [Tooltip("Eğrilik hassasiyeti — düşük değer: daha erken frenleme")]
+    public float curvatureSensitivity = 0.04f;
 
     [Header("PID Kontrolcüsü")]
     public PIDController pid;
@@ -26,6 +38,8 @@ public class CarLaneTracker : MonoBehaviour
     [HideInInspector] public Vector3 currentRefPoint = Vector3.zero;
     [HideInInspector] public float currentRefLateral = 0f;  // r(t)
     [HideInInspector] public float currentCarLateral = 0f;  // y(t)
+    [HideInInspector] public float currentCurvature = 0f;   // yolun eğriliği
+    [HideInInspector] public float currentActualSpeed = 0f;  // gerçek hız
 
     private float currentSteerAngle = 0f;
     private DataLogger logger;
@@ -37,10 +51,10 @@ public class CarLaneTracker : MonoBehaviour
         logger = GetComponent<DataLogger>();
         if (pid == null) pid = new PIDController();
 
-        // Güvenli varsayılan PID değerleri
-        pid.Kp = 5.0f;
+        // Grafikte hatayı net görebilmek için zayıflatılmış PID değerleri
+        pid.Kp = 1.5f;
         pid.Ki = 0.0f;
-        pid.Kd = 3.0f;
+        pid.Kd = 0.5f;
         pid.maxIntegral = 10f;
 
         // WheelCollider uyarılarını gider:
@@ -50,6 +64,9 @@ public class CarLaneTracker : MonoBehaviour
         {
             if (wc != null) DestroyImmediate(wc);
         }
+
+        // Başlangıçta hedef hız = forwardSpeed
+        targetSpeed = forwardSpeed;
     }
 
     void Start()
@@ -97,6 +114,56 @@ public class CarLaneTracker : MonoBehaviour
         {
             Debug.LogError("[CarLaneTracker] Spline bulunamadı!");
         }
+    }
+
+    /// <summary>
+    /// Yolun belirli bir t noktasındaki eğriliğini (curvature) hesaplar.
+    /// Eğrilik = |dT/ds| ≈ iki yakın tanjant vektörünün açısal farkı / mesafe
+    /// Yüksek eğrilik = keskin viraj
+    /// </summary>
+    float CalculateCurvature(float t)
+    {
+        float dt = 0.005f;
+        float t0 = Mathf.Clamp01(t - dt);
+        float t1 = t;
+        float t2 = Mathf.Clamp01(t + dt);
+
+        // Üç noktayı dünya koordinatlarında hesapla
+        Vector3 p0 = targetSpline.transform.TransformPoint(
+            (Vector3)SplineUtility.EvaluatePosition(targetSpline.Spline, t0));
+        Vector3 p1 = targetSpline.transform.TransformPoint(
+            (Vector3)SplineUtility.EvaluatePosition(targetSpline.Spline, t1));
+        Vector3 p2 = targetSpline.transform.TransformPoint(
+            (Vector3)SplineUtility.EvaluatePosition(targetSpline.Spline, t2));
+
+        // İki tanjant vektörü
+        Vector3 tan1 = (p1 - p0).normalized;
+        Vector3 tan2 = (p2 - p1).normalized;
+
+        if (tan1.sqrMagnitude < 0.0001f || tan2.sqrMagnitude < 0.0001f) return 0f;
+
+        // Eğrilik ≈ açısal değişim / ark uzunluğu
+        float angle = Vector3.Angle(tan1, tan2) * Mathf.Deg2Rad;
+        float dist = ((p1 - p0).magnitude + (p2 - p1).magnitude) * 0.5f;
+        if (dist < 0.001f) return 0f;
+
+        return angle / dist;
+    }
+
+    /// <summary>
+    /// Eğrilik tabanlı otomatik hız kontrolü.
+    /// Yüksek eğrilikli (keskin viraj) bölgelerde hızı düşürür.
+    /// </summary>
+    float CalculateSpeedForCurvature(float curvature)
+    {
+        if (!autoBrakeOnCurves) return targetSpeed;
+
+        // Eğrilik ne kadar yüksekse, hız o kadar düşük
+        // factor: 0 (keskin viraj) → 1 (düz yol)
+        float factor = 1f - Mathf.Clamp01(curvature / curvatureSensitivity);
+        float desiredSpeed = Mathf.Lerp(minCurveSpeed, targetSpeed, factor);
+
+        return desiredSpeed;
     }
 
     void FixedUpdate()
@@ -156,7 +223,19 @@ public class CarLaneTracker : MonoBehaviour
         currentSteerAngle = Mathf.MoveTowards(
             currentSteerAngle, targetSteer, steeringSpeed * Time.fixedDeltaTime);
 
-        // === 6. KİNEMATİK BİSİKLET MODELİ ===
+        // === 6. HIZ KONTROL SİSTEMİ ===
+        // Eğrilik hesapla (ilerideki yol parçası)
+        float lookAheadT = Mathf.Clamp01(splineT + 0.02f); // Biraz ilerisine bak
+        currentCurvature = CalculateCurvature(lookAheadT);
+
+        // Eğriliğe göre hedef hızı belirle
+        float desiredSpeed = CalculateSpeedForCurvature(currentCurvature);
+
+        // Hızı yumuşak şekilde hedefe doğru değiştir (ivme/fren)
+        forwardSpeed = Mathf.MoveTowards(forwardSpeed, desiredSpeed, speedChangeRate * Time.fixedDeltaTime);
+        currentActualSpeed = forwardSpeed;
+
+        // === 7. KİNEMATİK BİSİKLET MODELİ ===
         // yaw_rate = (v / L) * tan(δ)
         float steerRad  = currentSteerAngle * Mathf.Deg2Rad;
         float yawRateDeg = (forwardSpeed / wheelBase) * Mathf.Tan(steerRad) * Mathf.Rad2Deg;
@@ -170,9 +249,9 @@ public class CarLaneTracker : MonoBehaviour
             Mathf.Max(transform.position.y, 0.5f),
             transform.position.z);
 
-        // === 7. VERİ KAYDET ===
+        // === 8. VERİ KAYDET ===
         if (logger != null)
-            logger.LogData(error, u, transform.position, nearestWorld, pid.mode.ToString());
+            logger.LogData(error, u, transform.position, nearestWorld, pid.mode.ToString(), forwardSpeed, targetSpeed);
 
         // Sahne görünümü debug çizgileri
         Debug.DrawLine(transform.position, nearestWorld, Color.green);

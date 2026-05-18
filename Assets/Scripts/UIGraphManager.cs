@@ -19,13 +19,13 @@ public class UIGraphManager : MonoBehaviour
     private int gh = 130;   // yükseklik
 
     // Texture & RawImage referansları
-    private Texture2D texError, texControl, texPath;
-    private RawImage  imgError, imgControl, imgPath;
+    private Texture2D texError, texControl, texPath, texSpeed;
+    private RawImage  imgError, imgControl, imgPath, imgSpeed;
     private Color[] bgPixels;
 
     // Slider referansları
-    private Slider slKp, slKi, slKd;
-    private InputField inKp, inKi, inKd;
+    private Slider slKp, slKi, slKd, slSpeed;
+    private InputField inKp, inKi, inKd, inSpeed;
 
     // Grafik kalemi x konumu
     private int cursorX = 0;
@@ -38,6 +38,12 @@ public class UIGraphManager : MonoBehaviour
     // Mod butonları referansları (aktif mod vurgusu için)
     private Button[] modeButtons = new Button[3];
     private Image[]  modeBtnImages = new Image[3];
+
+    // Hız kontrol UI
+    private Button autoBrakeBtn;
+    private Image  autoBrakeImg;
+    private Text   autoBrakeTxt;
+    private Text   speedLabel;
 
     // Kaydedilmiş PID parametreleri (mod geçişlerinde korunması için)
     private float savedKp = 2f;
@@ -77,7 +83,7 @@ public class UIGraphManager : MonoBehaviour
         // ---- Sol Panel: 3 grafik ----
         RectTransform leftPanel = MakeRect("LeftPanel", root,
             new Vector2(0,1), new Vector2(0,1), new Vector2(0,1),
-            new Vector2(16, -16), new Vector2(gw, gh * 3 + 100));
+            new Vector2(16, -16), new Vector2(gw, gh * 4 + 140));
 
         // Başlık
         MakeLabel(leftPanel, "title",
@@ -99,10 +105,15 @@ public class UIGraphManager : MonoBehaviour
             new Vector2(4, -102 - gh * 2 - 6), new Vector2(gw, 22), 16, new Color(0.7f, 1f, 0.4f), FontStyle.Bold);
         imgPath = MakeGraph(leftPanel, "GrPath", new Vector2(0, -128 - gh * 2), gw, gh);
 
+        // Grafik 4 — Hız v(t)
+        MakeLabel(leftPanel, "lbl4", "\u25cf  Hız v(t) (m/s)  —  Turuncu: gerçek  |  Beyaz: hedef",
+            new Vector2(4, -128 - gh * 3 - 6), new Vector2(gw, 22), 16, new Color(1f, 0.65f, 0.2f), FontStyle.Bold);
+        imgSpeed = MakeGraph(leftPanel, "GrSpeed", new Vector2(0, -154 - gh * 3), gw, gh);
+
         // ---- Sağ Panel: PID ayarları + mod seçimi ----
         RectTransform rightPanel = MakeRect("RightPanel", root,
             new Vector2(1,1), new Vector2(1,1), new Vector2(1,1),
-            new Vector2(-16, -16), new Vector2(400, 400));
+            new Vector2(-16, -16), new Vector2(400, 520));
 
         Image bg = rightPanel.gameObject.AddComponent<Image>();
         bg.color = new Color(0.06f, 0.08f, 0.12f, 0.92f);
@@ -125,8 +136,41 @@ public class UIGraphManager : MonoBehaviour
         activeModeLabel = MakeLabel(rightPanel, "activeModeLbl", "Aktif Mod: PID",
             new Vector2(12, -266), new Vector2(360, 26), 16, new Color(0.4f, 1f, 0.5f), FontStyle.Bold);
 
+        // === HIZ KONTROL BÖLÜMÜ ===
+        MakeLabel(rightPanel, "lblSpeed", "─── Hız Kontrolü ───",
+            new Vector2(12, -298), new Vector2(360, 26), 15, new Color(1f, 0.7f, 0.3f), FontStyle.Bold, TextAnchor.MiddleCenter);
+
+        // Hız slider (idx=3 → y offset hesaplanır ayrıca)
+        MakeLabel(rightPanel, "Speed_lbl", "Hız:",
+            new Vector2(14, -326), new Vector2(40, 32), 15, Color.white);
+        inSpeed = MakeInputField(rightPanel, "Speed_input", new Vector2(54, -322), new Vector2(60, 26));
+        slSpeed = MakeSliderAt(rightPanel, "Speed_sl", new Vector2(124, -322), new Vector2(234, 26), 2f, 30f);
+
+        speedLabel = MakeLabel(rightPanel, "speedInfo", "Gerçek: 0.0 m/s | Hedef: 14.0 m/s",
+            new Vector2(12, -354), new Vector2(360, 22), 14, new Color(1f, 0.8f, 0.4f));
+
+        // Otomatik fren butonu
+        BuildAutoBrakeButton(rightPanel, new Vector2(12, -382), new Vector2(356, 38));
+
+        // Hız slider dinleyicileri
+        if (carTracker != null)
+        {
+            slSpeed.value = carTracker.targetSpeed;
+            inSpeed.text = carTracker.targetSpeed.ToString("F1");
+            slSpeed.onValueChanged.AddListener(v => {
+                carTracker.targetSpeed = v;
+                if (!inSpeed.isFocused) inSpeed.text = v.ToString("F1");
+            });
+            inSpeed.onEndEdit.AddListener(s => {
+                if (float.TryParse(s, out float val)) {
+                    val = Mathf.Clamp(val, 2f, 30f);
+                    slSpeed.value = val;
+                }
+            });
+        }
+
         // Durdur / Devam butonu
-        rightPanel.GetComponent<RectTransform>().sizeDelta = new Vector2(380, 380);
+        rightPanel.GetComponent<RectTransform>().sizeDelta = new Vector2(380, 500);
         var pauseGo = new GameObject("PauseBtn");
         pauseGo.transform.SetParent(rightPanel, false);
         var pauseImg = pauseGo.AddComponent<Image>();
@@ -134,7 +178,7 @@ public class UIGraphManager : MonoBehaviour
         var pauseRt = pauseGo.GetComponent<RectTransform>();
         pauseRt.anchorMin = new Vector2(0,1); pauseRt.anchorMax = new Vector2(1,1);
         pauseRt.pivot = new Vector2(0.5f, 1);
-        pauseRt.anchoredPosition = new Vector2(0, -296); pauseRt.sizeDelta = new Vector2(-20, 44);
+        pauseRt.anchoredPosition = new Vector2(0, -430); pauseRt.sizeDelta = new Vector2(-20, 44);
         var pauseTxtGo = new GameObject("PauseTxt"); pauseTxtGo.transform.SetParent(pauseGo.transform, false);
         pauseBtnText = pauseTxtGo.AddComponent<Text>();
         pauseBtnText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -222,6 +266,7 @@ public class UIGraphManager : MonoBehaviour
         ApplyBg(texError);   if (imgError   != null) imgError.texture   = texError;
         ApplyBg(texControl); if (imgControl != null) imgControl.texture = texControl;
         ApplyBg(texPath);    if (imgPath    != null) imgPath.texture    = texPath;
+        ApplyBg(texSpeed);   if (imgSpeed   != null) imgSpeed.texture   = texSpeed;
     }
 
     // ============================================================
@@ -251,6 +296,7 @@ public class UIGraphManager : MonoBehaviour
         texError   = NewTex();
         texControl = NewTex();
         texPath    = NewTex();
+        texSpeed   = NewTex();
 
         bgPixels = new Color[gw * gh];
         for (int i = 0; i < bgPixels.Length; i++)
@@ -262,6 +308,7 @@ public class UIGraphManager : MonoBehaviour
         ApplyBg(texError);   if (imgError   != null) imgError.texture   = texError;
         ApplyBg(texControl); if (imgControl != null) imgControl.texture = texControl;
         ApplyBg(texPath);    if (imgPath    != null) imgPath.texture    = texPath;
+        ApplyBg(texSpeed);   if (imgSpeed   != null) imgSpeed.texture   = texSpeed;
     }
 
     // ============================================================
@@ -273,15 +320,19 @@ public class UIGraphManager : MonoBehaviour
         float ctrl = carTracker.currentControlSignal;  // u(t)
         float refLateral = carTracker.currentRefLateral;  // r(t)
         float carLateral = carTracker.currentCarLateral;  // y(t)
+        float actualSpeed = carTracker.currentActualSpeed; // v(t)
+        float tgtSpeed    = carTracker.targetSpeed;        // hedef hız
 
         // --- Grafik 1: Hata e(t) — ölçek ±8 birim ---
         int ey = WorldToPixel(err, 8f);
         // --- Grafik 2: Kontrol u(t) — ölçek ±maxSteer derece ---
         int cy = WorldToPixel(ctrl, carTracker.maxSteerDeg);
         // --- Grafik 3: r(t) vs y(t) — Yanal konum karşılaştırması ---
-        // r(t) = 0 (referans), y(t) = yanal sapma
         int ry = WorldToPixel(refLateral, 4f);
         int ay = WorldToPixel(carLateral, 4f);
+        // --- Grafik 4: Hız v(t) — ölçek 0..30 m/s (ortası=15) ---
+        int sy = WorldToPixelUnsigned(actualSpeed, 30f);
+        int ty = WorldToPixelUnsigned(tgtSpeed, 30f);
 
         // Kaydır veya yaz
         if (cursorX >= gw)
@@ -289,6 +340,7 @@ public class UIGraphManager : MonoBehaviour
             ShiftLeft(texError);
             ShiftLeft(texControl);
             ShiftLeft(texPath);
+            ShiftLeft(texSpeed);
             cursorX = gw - 1;
         }
 
@@ -296,8 +348,14 @@ public class UIGraphManager : MonoBehaviour
         Plot(texControl, cursorX, cy, new Color(0.3f, 0.8f, 1f));
         Plot(texPath,    cursorX, ry, new Color(0.3f, 1f, 0.3f));
         Plot(texPath,    cursorX, ay, new Color(1f, 1f, 0.2f));
+        Plot(texSpeed,   cursorX, sy, new Color(1f, 0.55f, 0.1f));  // turuncu: gerçek hız
+        Plot(texSpeed,   cursorX, ty, new Color(0.9f, 0.9f, 0.9f)); // beyaz: hedef hız
 
-        texError.Apply(); texControl.Apply(); texPath.Apply();
+        texError.Apply(); texControl.Apply(); texPath.Apply(); texSpeed.Apply();
+
+        // Hız bilgi etiketi güncelle
+        if (speedLabel != null)
+            speedLabel.text = $"Gerçek: {actualSpeed:F1} m/s | Hedef: {tgtSpeed:F1} m/s | Eğrilik: {carTracker.currentCurvature:F3}";
 
         cursorX++;
     }
@@ -307,6 +365,10 @@ public class UIGraphManager : MonoBehaviour
 
     int WorldToPixel(float val, float range)
         => Mathf.Clamp(Mathf.RoundToInt((val / range) * (gh / 2f)) + gh / 2, 0, gh - 1);
+
+    // 0..max aralığında (unsigned) pixel pozisyonu — hız grafiği için
+    int WorldToPixelUnsigned(float val, float max)
+        => Mathf.Clamp(Mathf.RoundToInt((val / max) * (gh - 1)), 0, gh - 1);
 
     void Plot(Texture2D t, int x, int y, Color c)
     {
@@ -552,6 +614,91 @@ public class UIGraphManager : MonoBehaviour
                 Debug.Log($"Kontrolcü modu değiştirildi: {targetMode}");
             }
         });
+    }
+
+    // ---- Hız kontrol yardımcı fonksiyonlar ----
+
+    Slider MakeSliderAt(Transform parent, string name, Vector2 pos, Vector2 size, float min, float max)
+    {
+        var slGo = new GameObject(name);
+        slGo.transform.SetParent(parent, false);
+        var sl = slGo.AddComponent<Slider>();
+        var srt = slGo.GetComponent<RectTransform>();
+        srt.anchorMin = new Vector2(0, 1); srt.anchorMax = new Vector2(0, 1);
+        srt.pivot = new Vector2(0, 1);
+        srt.anchoredPosition = pos; srt.sizeDelta = size;
+
+        var bgObj = new GameObject("Bg"); bgObj.transform.SetParent(slGo.transform, false);
+        var bgImg = bgObj.AddComponent<Image>(); bgImg.color = new Color(0.2f, 0.2f, 0.25f);
+        var bgRt = bgObj.GetComponent<RectTransform>();
+        bgRt.anchorMin = Vector2.zero; bgRt.anchorMax = Vector2.one; bgRt.sizeDelta = Vector2.zero;
+
+        var fa = new GameObject("FillArea"); fa.transform.SetParent(slGo.transform, false);
+        var faRt = fa.AddComponent<RectTransform>();
+        faRt.anchorMin = new Vector2(0, 0.25f); faRt.anchorMax = new Vector2(1, 0.75f);
+        faRt.sizeDelta = Vector2.zero;
+
+        var fill = new GameObject("Fill"); fill.transform.SetParent(fa.transform, false);
+        var fillImg = fill.AddComponent<Image>(); fillImg.color = new Color(1f, 0.6f, 0.15f);
+        var fillRt = fill.GetComponent<RectTransform>(); fillRt.sizeDelta = Vector2.zero;
+
+        var ha = new GameObject("HandleArea"); ha.transform.SetParent(slGo.transform, false);
+        var haRt = ha.AddComponent<RectTransform>();
+        haRt.anchorMin = Vector2.zero; haRt.anchorMax = Vector2.one; haRt.sizeDelta = Vector2.zero;
+
+        var handle = new GameObject("Handle"); handle.transform.SetParent(ha.transform, false);
+        var handleImg = handle.AddComponent<Image>(); handleImg.color = Color.white;
+        var handleRt = handle.GetComponent<RectTransform>(); handleRt.sizeDelta = new Vector2(18, 0);
+
+        sl.targetGraphic = handleImg;
+        sl.fillRect = fillRt;
+        sl.handleRect = handleRt;
+        sl.minValue = min; sl.maxValue = max;
+
+        return sl;
+    }
+
+    void BuildAutoBrakeButton(Transform parent, Vector2 pos, Vector2 size)
+    {
+        var go = new GameObject("AutoBrakeBtn");
+        go.transform.SetParent(parent, false);
+        autoBrakeImg = go.AddComponent<Image>();
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0, 1); rt.anchorMax = new Vector2(0, 1);
+        rt.pivot = new Vector2(0, 1);
+        rt.anchoredPosition = pos; rt.sizeDelta = size;
+
+        var txtGo = new GameObject("Txt"); txtGo.transform.SetParent(go.transform, false);
+        autoBrakeTxt = txtGo.AddComponent<Text>();
+        autoBrakeTxt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        autoBrakeTxt.fontSize = 16; autoBrakeTxt.fontStyle = FontStyle.Bold;
+        autoBrakeTxt.color = Color.white;
+        autoBrakeTxt.alignment = TextAnchor.MiddleCenter;
+        var trt = txtGo.GetComponent<RectTransform>();
+        trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.sizeDelta = Vector2.zero;
+
+        autoBrakeBtn = go.AddComponent<Button>();
+        autoBrakeBtn.targetGraphic = autoBrakeImg;
+
+        // Başlangıç durumu
+        bool isOn = carTracker != null && carTracker.autoBrakeOnCurves;
+        UpdateAutoBrakeVisual(isOn);
+
+        autoBrakeBtn.onClick.AddListener(() => {
+            if (carTracker != null)
+            {
+                carTracker.autoBrakeOnCurves = !carTracker.autoBrakeOnCurves;
+                UpdateAutoBrakeVisual(carTracker.autoBrakeOnCurves);
+            }
+        });
+    }
+
+    void UpdateAutoBrakeVisual(bool isOn)
+    {
+        if (autoBrakeImg != null)
+            autoBrakeImg.color = isOn ? new Color(0.1f, 0.55f, 0.15f) : new Color(0.5f, 0.2f, 0.1f);
+        if (autoBrakeTxt != null)
+            autoBrakeTxt.text = isOn ? "🟢  Viraj Freni: AÇIK" : "🔴  Viraj Freni: KAPALI";
     }
 
     #endregion

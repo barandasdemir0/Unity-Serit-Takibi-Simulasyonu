@@ -13,6 +13,8 @@ public class DataLogger : MonoBehaviour
         public Vector3 carPos;     // y(t) — araç konumu
         public Vector3 refPos;     // r(t) — referans konumu
         public string mode;        // P / PI / PID
+        public float speed;        // v(t) — anlık hız
+        public float targetSpeed;  // hedef hız
     }
 
     private List<LogEntry> logs = new List<LogEntry>();
@@ -30,7 +32,7 @@ public class DataLogger : MonoBehaviour
         startTime = Time.time;
     }
 
-    public void LogData(float error, float controlSignal, Vector3 carPosition, Vector3 referencePosition, string controllerMode = "PID")
+    public void LogData(float error, float controlSignal, Vector3 carPosition, Vector3 referencePosition, string controllerMode = "PID", float speed = 0f, float targetSpeed = 0f)
     {
         if (Time.time >= nextLogTime)
         {
@@ -41,7 +43,9 @@ public class DataLogger : MonoBehaviour
                 controlSignal = controlSignal,
                 carPos = carPosition,
                 refPos = referencePosition,
-                mode = controllerMode
+                mode = controllerMode,
+                speed = speed,
+                targetSpeed = targetSpeed
             });
             nextLogTime = Time.time + logInterval;
         }
@@ -60,15 +64,16 @@ public class DataLogger : MonoBehaviour
         string fullPath = Path.Combine(desktopPath, fileName);
 
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine("Zaman(s);Mod;Hata_e(t);Kontrol_u(t);Arac_X;Arac_Z;Referans_X;Referans_Z");
+        sb.AppendLine("Zaman(s);Mod;Hata_e(t);Kontrol_u(t);Arac_X;Arac_Z;Referans_X;Referans_Z;Hiz(m/s);HedefHiz(m/s)");
 
         foreach (var log in logs)
         {
             string line = string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "{0:F3};{1};{2:F4};{3:F4};{4:F3};{5:F3};{6:F3};{7:F3}",
+                "{0:F3};{1};{2:F4};{3:F4};{4:F3};{5:F3};{6:F3};{7:F3};{8:F2};{9:F2}",
                 log.time, log.mode, log.error, log.controlSignal,
                 log.carPos.x, log.carPos.z,
-                log.refPos.x, log.refPos.z);
+                log.refPos.x, log.refPos.z,
+                log.speed, log.targetSpeed);
             sb.AppendLine(line);
         }
 
