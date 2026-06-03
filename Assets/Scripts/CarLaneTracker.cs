@@ -21,13 +21,22 @@ public class CarLaneTracker : MonoBehaviour
     [Tooltip("Hedef hız (m/s) — UI slider'ından ayarlanır")]
     public float targetSpeed = 14f;
     [Tooltip("Viraj eğriliğine göre otomatik fren")]
-    public bool autoBrakeOnCurves = true;
+    public bool autoBrakeOnCurves = false;
     [Tooltip("Minimum hız (virajlarda düşürülecek en alt değer)")]
     public float minCurveSpeed = 5f;
     [Tooltip("Hız değişim hızı (ivme/fren)")]
     public float speedChangeRate = 8f;
     [Tooltip("Eğrilik hassasiyeti — düşük değer: daha erken frenleme")]
     public float curvatureSensitivity = 0.04f;
+
+    [Header("Araç Dinamikleri")]
+    [Tooltip("Araç kütlesi (kg) — ağır araç daha yavaş tepki verir")]
+    public float vehicleMass = 1000f;
+    [HideInInspector] public float referenceMass = 1000f;
+
+    [Header("Başlangıç Hatası")]
+    [Tooltip("Başlangıçta şerit merkezinden yanal sapma (metre)")]
+    public float initialLateralOffset = 3f;
 
     [Header("PID Kontrolcüsü")]
     public PIDController pid;
@@ -105,7 +114,9 @@ public class CarLaneTracker : MonoBehaviour
 
             if (startFwd.sqrMagnitude < 0.001f) startFwd = Vector3.forward;
 
-            transform.position = startPos + Vector3.up * 0.5f;
+            // Başlangıç hatası: şerit merkezinden yanal offset uygula
+            Vector3 pathRight = Vector3.Cross(Vector3.up, startFwd).normalized;
+            transform.position = startPos + Vector3.up * 0.5f + pathRight * initialLateralOffset;
             transform.rotation = Quaternion.LookRotation(startFwd, Vector3.up);
 
             Debug.Log($"<color=lime>[CarLaneTracker] Araç yola snap'lendi → {transform.position}</color>");
@@ -150,20 +161,49 @@ public class CarLaneTracker : MonoBehaviour
         return angle / dist;
     }
 
-    /// <summary>
-    /// Eğrilik tabanlı otomatik hız kontrolü.
-    /// Yüksek eğrilikli (keskin viraj) bölgelerde hızı düşürür.
-    /// </summary>
     float CalculateSpeedForCurvature(float curvature)
     {
         if (!autoBrakeOnCurves) return targetSpeed;
 
         // Eğrilik ne kadar yüksekse, hız o kadar düşük
-        // factor: 0 (keskin viraj) → 1 (düz yol)
+        // factor: 0 (keskin viraj) -> 1 (düz yol)
         float factor = 1f - Mathf.Clamp01(curvature / curvatureSensitivity);
-        float desiredSpeed = Mathf.Lerp(minCurveSpeed, targetSpeed, factor);
+        
+        // Yenilik: Hedef hız yüksekse araba viraja daha hızlı ve agresif girsin (savrulması için).
+        // Sabit 5m/s yerine, hedef hızın %40'ına kadar düşsün.
+        float dynamicMinSpeed = Mathf.Max(minCurveSpeed, targetSpeed * 0.4f); 
+        
+        float desiredSpeed = Mathf.Lerp(dynamicMinSpeed, targetSpeed, factor);
 
         return desiredSpeed;
+    }
+
+    /// <summary>
+    /// Simülasyonu baştan başlatır: aracı başlangıç noktasına (offset ile) geri taşır.
+    /// </summary>
+    public void RestartSimulation()
+    {
+        if (targetSpline == null) return;
+
+        Vector3 startPos = targetSpline.transform.TransformPoint(
+            (Vector3)SplineUtility.EvaluatePosition(targetSpline.Spline, 0f));
+        Vector3 p0 = targetSpline.transform.TransformPoint(
+            (Vector3)SplineUtility.EvaluatePosition(targetSpline.Spline, 0f));
+        Vector3 p1 = targetSpline.transform.TransformPoint(
+            (Vector3)SplineUtility.EvaluatePosition(targetSpline.Spline, 0.001f));
+        Vector3 startFwd = (p1 - p0).normalized;
+        if (startFwd.sqrMagnitude < 0.001f) startFwd = Vector3.forward;
+
+        Vector3 pathRight = Vector3.Cross(Vector3.up, startFwd).normalized;
+        transform.position = startPos + Vector3.up * 0.5f + pathRight * initialLateralOffset;
+        transform.rotation = Quaternion.LookRotation(startFwd, Vector3.up);
+
+        currentSteerAngle = 0f;
+        splineT = 0f;
+        forwardSpeed = targetSpeed;
+        pid.ResetController();
+
+        Debug.Log($"<color=yellow>[CarLaneTracker] Simülasyon yeniden başlatıldı — Offset: {initialLateralOffset}m</color>");
     }
 
     void FixedUpdate()
@@ -218,10 +258,12 @@ public class CarLaneTracker : MonoBehaviour
         float u = pid.CalculateControlSignal(error, Time.fixedDeltaTime);
         currentControlSignal = u;
 
-        // === 5. DİREKSİYON YUMUŞATMA ===
+        // === 5. DİREKSİYON YUMUŞATMA (Kütle Etkili) ===
+        float massFactor = vehicleMass / referenceMass;
+        float effectiveSteeringSpeed = steeringSpeed / massFactor;
         float targetSteer = Mathf.Clamp(u, -maxSteerDeg, maxSteerDeg);
         currentSteerAngle = Mathf.MoveTowards(
-            currentSteerAngle, targetSteer, steeringSpeed * Time.fixedDeltaTime);
+            currentSteerAngle, targetSteer, effectiveSteeringSpeed * Time.fixedDeltaTime);
 
         // === 6. HIZ KONTROL SİSTEMİ ===
         // Eğrilik hesapla (ilerideki yol parçası)

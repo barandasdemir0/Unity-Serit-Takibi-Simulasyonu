@@ -37814,6 +37814,9 @@ MonoBehaviour:
   minCurveSpeed: 5
   speedChangeRate: 8
   curvatureSensitivity: 0.04
+  vehicleMass: 1000
+  referenceMass: 1000
+  initialLateralOffset: 3
   pid:
     mode: 2
     Kp: 1

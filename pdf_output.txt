@@ -1,0 +1,121 @@
+Final Ödevi
+Unity Ortamında PID Kontrol ile Araba Şerit Takibi
+Ders:Otomatik Kontrol
+Ödev Tanımı
+Öğrencilerden Unity ortamında bir araba şerit takip sistemi geliştirmeleri istenmek-
+tedir. Simülasyonda araç, tanımlanan yol veya şerit merkez çizgisini takip etmelidir. Yol
+yapısı yalnızca düz hatlardan oluşmamalı; farklı eğriliklerde virajlar içermelidir.
+Araç, PID kontrol kullanarak şerit merkezinden sapmayı minimize edecek şekilde yönlen-
+dirilmelidir.
+Sistem AçıklamasıB
+uprojedetemelamaç,aracınyolüzerindeki şeritmerkezçizgisine mümkün oldu-
+ğuncayakınkalmasıdır .
+Kontrolsistemigenelolarakşuşekildetanımlanacaktır:
+•Referans değer r(t):Şeritmerkezhattı/hedefyörünge
+•Sistemçıkışı y(t):Şeritmerkezine göreyanalkonumu
+•Hata e(t):Aracınşeritmerkezinden sapması
+•Kontrolçıkışı u(t):Aracınsağaveyasolayönelmesini sağlayan kontrolgirdisi
+İstenenler1.
+UnityOrtamında YolveAraçModeliOluşturulması
+Unityortamında aşağıdaki özelliklere sahipbirsahneoluşturmaları beklenmektedir:
+•biraraçmodeli,
+•enazbirşeritveyayolmerkezitanımı,
+•yolüzerindevirajlıbölümler ,
+•hafifviraj+keskinvirajiçerenyapı(enaz6virajlı).
+Yolyapısıyalnızca düzbirçizgiden oluşmamalıdır. Araçperformansının özellikle viraj-
+lardagözlemlenebilmesi içinrotakıvrımlıolmalıdır.
+1\n2. PID Kontrolcünün Gerçeklenmesi
+Araç şerit takibini sağlamak için PID kontrolcü uygulanmalıdır.
+PID kontrol denklemi:
+u(t) =Kpe(t) +KiZ
+e(t)dt+Kdde(t)
+dt
+Burada:
+•Kp: oransal kazanç
+•Ki: integral kazanç
+•Kd: türevsel kazanç
+Aracın kontrol çıkışı u(t)ve referans yol ile izlenen yolun karşılaştırmasına ait grafikler
+Unity içinde gösterilmelidir. PID denetleyici Unity projesi içinde gerçek zamanlı çalışma-
+lıdır. C# scriptlerinin geliştirilmesinde Visual Studio kullanılabilir.
+3. Hata Tanımı
+Araç için hata sinyali, aracın referans yolun merkez hattına göre yanal sapması olarak
+tanımlanmalıdır.
+e(t) =r(t)−y(t)
+Burada r(t)referans yolun merkezini, y(t)ise aracın mevcut yanal konumunu ifade eder.4.
+KontrolÇıkışı
+Kontrolcü çıkışı u(t),aracınyolüzerinde şeritmerkezine tekraryaklaşmasını sağlayan
+yönlendirme kontrolsinyalidir .
+Businyal,aracınhareketyönünüdeğiştirerek sağaveyasolayönelmesine etkieder.Başka
+birifadeyle, kontrolcü tarafından üretilen u(t)değeri,aracınşeritmerkezinden sapmasını
+azaltmak içinkullanılan kontrolgirdisidir.
+5. P, PI ve PID Kontrolcülerinin Test Edilmesi
+Aynı sistem üzerinde P,PIvePIDkontrolcülerinin ayrı ayrı uygulanması ve elde edi-
+len sonuçların karşılaştırılması zorunludur . Karşılaştırmada özellikle referans yolu takip
+başarımı dikkate alınmalıdır.
+2\nÇizdirilmesi İstenen Grafikler
+Her öğrenci, simülasyon sonucunda aşağıdaki grafiklere raporunda yer vermelidir.
+Zorunlu Grafikler
+•kontrolcü çıkışı u(t),
+•referans ve gerçek izlenen yol karşılaştırması.
+Analizler
+Öğrenciler raporlarında aşağıdaki sorulara cevapvermelidir:
+•Araçdüzyoldanasıldavranmaktadır?
+•Virajlarda hatanasıldeğişmektedir?
+•PIDparametreleri değiştirildiğinde araçdavranışı nasıletkilenmektedir?
+•Hangiparametre setieniyisonucuvermiştir?
+•Kontrolsinyaliçokagresifmidir,yumuşak mıdır?
+•Araçsalınımyapmakta mıdır?
+•Sistemkararlımıdır?
+•Keskinvirajlarda takipbaşarımı düşmekte midir?
+•Kontrolcü parametreleri değiştiğinde yükselme veyerleşme sürelerine
+ilişkindavranış nasıletkilenmektedir?
+Teslimde Bulunması Gerekenler
+1. Unity Projesi
+•Çalışan proje dosyaları
+•Kodlar düzenli ve açıklamalı olmalıdır2.
+Rapor
+Raporaşağıdaki başlıkları içermelidir:
+(a)Amaç
+(b)Sistemveyoltanımı
+(c)Hatavekontrolcü yapısı
+(d)Kullanılan parametreler
+(e)Grafikler
+(f)Karşılaştırma veanalizler
+3\n(g) Sonuç
+Teknik Beklentiler
+•Araç şerit merkezini mümkün olduğunca takip etmelidir.
+•Yol üzerinde mutlaka viraj bulunmalıdır.
+•Kontrolcü doğrudan öğrenci tarafından kodlanmalıdır.
+•Hazır bir paket kullanılmışsa, öğrencinin kontrol mantığını ayrıntılı biçimde açık-
+laması gerekir.
+•Grafikler simülasyondan elde edilen gerçek verilere dayanmalıdır.
+•Kod içinde kullanılan değişkenler anlamlı olmalıdır.
+•PID parametre ayarı deneme-yanılma veya sistematik yöntemle yapılabilir; ancak
+nasıl seçildiği raporda belirtilmelidir.
+Değerlendirme Ölçütleri
+100 Puan Üzerinden
+1.Unity ortamında araç ve yol modelinin kurulması – 15 puan
+•Sahnenin çalışır durumda olması
+•Yolun virajlar içermesi
+2.Şerit takip mantığının kurulması – 15 puan
+•Hata tanımının doğru yapılması
+•Referans yolun doğru belirlenmesi
+3.PID kontrolcünün doğru uygulanması – 20 puan
+•K p,K i,K dbileşenlerinin doğru kullanılması
+•Kontrol çıkışının araca doğru uygulanması
+4.Virajlı yolda başarı – 15 puan
+•Aracın virajlarda şeritten çıkmadan veya minimum sapmayla ilerlemesi
+5.Grafiklerin sunulması – 10 puan
+•e(t),u(t), yol takibi ve sapma grafiklerinin verilmesi
+6.Analiz ve yorum – 15 puan
+•PID parametrelerinin etkilerinin doğru yorumlanması
+4\n•Düz yol ve virajlı yol farklarının açıklanması
+7.Rapor kalitesi – 10 puan
+Önemli Notlar
+•Yolun yalnızca düz olması kabul edilmeyecektir.
+•Virajlı yol yapısı ödevin temel gerekliliklerinden biridir.
+•Sadece çalışan bir araç modeli yeterli değildir; hata, kontrol sinyali ve sistem dav-
+ranışı analiz edilmelidir.
+•Grafik vermeyen veya teknik yorum içermeyen çalışmalar eksik kabul edilecektir.
+Başarılar dilerim.
+5

@@ -24,8 +24,8 @@ public class UIGraphManager : MonoBehaviour
     private Color[] bgPixels;
 
     // Slider referansları
-    private Slider slKp, slKi, slKd, slSpeed;
-    private InputField inKp, inKi, inKd, inSpeed;
+    private Slider slKp, slKi, slKd, slSpeed, slMass, slOffset;
+    private InputField inKp, inKi, inKd, inSpeed, inMass, inOffset;
 
     // Grafik kalemi x konumu
     private int cursorX = 0;
@@ -44,6 +44,7 @@ public class UIGraphManager : MonoBehaviour
     private Image  autoBrakeImg;
     private Text   autoBrakeTxt;
     private Text   speedLabel;
+    private Text   massLabel;
 
     // Kaydedilmiş PID parametreleri (mod geçişlerinde korunması için)
     private float savedKp = 2f;
@@ -144,13 +145,37 @@ public class UIGraphManager : MonoBehaviour
         MakeLabel(rightPanel, "Speed_lbl", "Hız:",
             new Vector2(14, -326), new Vector2(40, 32), 15, Color.white);
         inSpeed = MakeInputField(rightPanel, "Speed_input", new Vector2(54, -322), new Vector2(60, 26));
-        slSpeed = MakeSliderAt(rightPanel, "Speed_sl", new Vector2(124, -322), new Vector2(234, 26), 2f, 30f);
+        slSpeed = MakeSliderAt(rightPanel, "Speed_sl", new Vector2(124, -322), new Vector2(234, 26), 2f, 50f);
 
         speedLabel = MakeLabel(rightPanel, "speedInfo", "Gerçek: 0.0 m/s | Hedef: 14.0 m/s",
             new Vector2(12, -354), new Vector2(360, 22), 14, new Color(1f, 0.8f, 0.4f));
 
         // Otomatik fren butonu
         BuildAutoBrakeButton(rightPanel, new Vector2(12, -382), new Vector2(356, 38));
+
+        // === ARAÇ DİNAMİKLERİ BÖLÜMÜ ===
+        MakeLabel(rightPanel, "lblDynamics", "─── Araç Dinamikleri ───",
+            new Vector2(12, -428), new Vector2(360, 26), 15, new Color(0.6f, 0.8f, 1f), FontStyle.Bold, TextAnchor.MiddleCenter);
+
+        MakeLabel(rightPanel, "Mass_lbl", "Kütle:",
+            new Vector2(14, -456), new Vector2(50, 32), 15, Color.white);
+        inMass = MakeInputField(rightPanel, "Mass_input", new Vector2(64, -452), new Vector2(60, 26));
+        slMass = MakeSliderAt(rightPanel, "Mass_sl", new Vector2(134, -452), new Vector2(224, 26), 200f, 5000f);
+
+        massLabel = MakeLabel(rightPanel, "massInfo", "Kütle: 1000 kg | Faktör: 1.00x",
+            new Vector2(12, -484), new Vector2(360, 22), 14, new Color(0.6f, 0.85f, 1f));
+
+        // === BAŞLANGIÇ HATASI BÖLÜMÜ ===
+        MakeLabel(rightPanel, "lblOffset", "─── Başlangıç Hatası ───",
+            new Vector2(12, -512), new Vector2(360, 26), 15, new Color(1f, 0.6f, 0.8f), FontStyle.Bold, TextAnchor.MiddleCenter);
+
+        MakeLabel(rightPanel, "Offset_lbl", "Offset:",
+            new Vector2(14, -540), new Vector2(50, 32), 15, Color.white);
+        inOffset = MakeInputField(rightPanel, "Offset_input", new Vector2(64, -536), new Vector2(60, 26));
+        slOffset = MakeSliderAt(rightPanel, "Offset_sl", new Vector2(134, -536), new Vector2(224, 26), -10f, 10f);
+
+        // Yeniden Başlat butonu
+        BuildRestartButton(rightPanel, new Vector2(12, -572), new Vector2(356, 38));
 
         // Hız slider dinleyicileri
         if (carTracker != null)
@@ -163,14 +188,42 @@ public class UIGraphManager : MonoBehaviour
             });
             inSpeed.onEndEdit.AddListener(s => {
                 if (float.TryParse(s, out float val)) {
-                    val = Mathf.Clamp(val, 2f, 30f);
+                    val = Mathf.Clamp(val, 2f, 50f);
                     slSpeed.value = val;
+                }
+            });
+
+            // Kütle slider dinleyicileri
+            slMass.value = carTracker.vehicleMass;
+            inMass.text = carTracker.vehicleMass.ToString("F0");
+            slMass.onValueChanged.AddListener(v => {
+                carTracker.vehicleMass = v;
+                if (!inMass.isFocused) inMass.text = v.ToString("F0");
+            });
+            inMass.onEndEdit.AddListener(s => {
+                if (float.TryParse(s, out float val)) {
+                    val = Mathf.Clamp(val, 200f, 5000f);
+                    slMass.value = val;
+                }
+            });
+
+            // Offset slider dinleyicileri
+            slOffset.value = carTracker.initialLateralOffset;
+            inOffset.text = carTracker.initialLateralOffset.ToString("F1");
+            slOffset.onValueChanged.AddListener(v => {
+                carTracker.initialLateralOffset = v;
+                if (!inOffset.isFocused) inOffset.text = v.ToString("F1");
+            });
+            inOffset.onEndEdit.AddListener(s => {
+                if (float.TryParse(s, out float val)) {
+                    val = Mathf.Clamp(val, -10f, 10f);
+                    slOffset.value = val;
                 }
             });
         }
 
         // Durdur / Devam butonu
-        rightPanel.GetComponent<RectTransform>().sizeDelta = new Vector2(380, 500);
+        rightPanel.GetComponent<RectTransform>().sizeDelta = new Vector2(380, 680);
         var pauseGo = new GameObject("PauseBtn");
         pauseGo.transform.SetParent(rightPanel, false);
         var pauseImg = pauseGo.AddComponent<Image>();
@@ -178,7 +231,7 @@ public class UIGraphManager : MonoBehaviour
         var pauseRt = pauseGo.GetComponent<RectTransform>();
         pauseRt.anchorMin = new Vector2(0,1); pauseRt.anchorMax = new Vector2(1,1);
         pauseRt.pivot = new Vector2(0.5f, 1);
-        pauseRt.anchoredPosition = new Vector2(0, -430); pauseRt.sizeDelta = new Vector2(-20, 44);
+        pauseRt.anchoredPosition = new Vector2(0, -624); pauseRt.sizeDelta = new Vector2(-20, 44);
         var pauseTxtGo = new GameObject("PauseTxt"); pauseTxtGo.transform.SetParent(pauseGo.transform, false);
         pauseBtnText = pauseTxtGo.AddComponent<Text>();
         pauseBtnText.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -263,10 +316,10 @@ public class UIGraphManager : MonoBehaviour
     void ClearGraphs()
     {
         cursorX = 0;
-        ApplyBg(texError);   if (imgError   != null) imgError.texture   = texError;
-        ApplyBg(texControl); if (imgControl != null) imgControl.texture = texControl;
-        ApplyBg(texPath);    if (imgPath    != null) imgPath.texture    = texPath;
-        ApplyBg(texSpeed);   if (imgSpeed   != null) imgSpeed.texture   = texSpeed;
+        ApplyBg(texError);   if (imgError   != null) { imgError.texture   = texError; imgError.uvRect = new Rect(0,0,1,1); }
+        ApplyBg(texControl); if (imgControl != null) { imgControl.texture = texControl; imgControl.uvRect = new Rect(0,0,1,1); }
+        ApplyBg(texPath);    if (imgPath    != null) { imgPath.texture    = texPath; imgPath.uvRect = new Rect(0,0,1,1); }
+        ApplyBg(texSpeed);   if (imgSpeed   != null) { imgSpeed.texture   = texSpeed; imgSpeed.uvRect = new Rect(0,0,1,1); }
     }
 
     // ============================================================
@@ -297,6 +350,11 @@ public class UIGraphManager : MonoBehaviour
         texControl = NewTex();
         texPath    = NewTex();
         texSpeed   = NewTex();
+
+        texError.wrapMode = TextureWrapMode.Repeat;
+        texControl.wrapMode = TextureWrapMode.Repeat;
+        texPath.wrapMode = TextureWrapMode.Repeat;
+        texSpeed.wrapMode = TextureWrapMode.Repeat;
 
         bgPixels = new Color[gw * gh];
         for (int i = 0; i < bgPixels.Length; i++)
@@ -330,32 +388,42 @@ public class UIGraphManager : MonoBehaviour
         // --- Grafik 3: r(t) vs y(t) — Yanal konum karşılaştırması ---
         int ry = WorldToPixel(refLateral, 4f);
         int ay = WorldToPixel(carLateral, 4f);
-        // --- Grafik 4: Hız v(t) — ölçek 0..30 m/s (ortası=15) ---
-        int sy = WorldToPixelUnsigned(actualSpeed, 30f);
-        int ty = WorldToPixelUnsigned(tgtSpeed, 30f);
+        // --- Grafik 4: Hız v(t) — ölçek 0..50 m/s (ortası=25) ---
+        int sy = WorldToPixelUnsigned(actualSpeed, 50f);
+        int ty = WorldToPixelUnsigned(tgtSpeed, 50f);
 
-        // Kaydır veya yaz
-        if (cursorX >= gw)
-        {
-            ShiftLeft(texError);
-            ShiftLeft(texControl);
-            ShiftLeft(texPath);
-            ShiftLeft(texSpeed);
-            cursorX = gw - 1;
-        }
+        // Yazılacak sütunu belirle
+        int drawX = cursorX % gw;
 
-        Plot(texError,   cursorX, ey, Color.red);
-        Plot(texControl, cursorX, cy, new Color(0.3f, 0.8f, 1f));
-        Plot(texPath,    cursorX, ry, new Color(0.3f, 1f, 0.3f));
-        Plot(texPath,    cursorX, ay, new Color(1f, 1f, 0.2f));
-        Plot(texSpeed,   cursorX, sy, new Color(1f, 0.55f, 0.1f));  // turuncu: gerçek hız
-        Plot(texSpeed,   cursorX, ty, new Color(0.9f, 0.9f, 0.9f)); // beyaz: hedef hız
+        // Yazılacak sütunu temizle
+        ClearColumn(texError, drawX);
+        ClearColumn(texControl, drawX);
+        ClearColumn(texPath, drawX);
+        ClearColumn(texSpeed, drawX);
+
+        Plot(texError,   drawX, ey, Color.red);
+        Plot(texControl, drawX, cy, new Color(0.3f, 0.8f, 1f));
+        Plot(texPath,    drawX, ry, new Color(0.3f, 1f, 0.3f));
+        Plot(texPath,    drawX, ay, new Color(1f, 1f, 0.2f));
+        Plot(texSpeed,   drawX, sy, new Color(1f, 0.55f, 0.1f));  // turuncu: gerçek hız
+        Plot(texSpeed,   drawX, ty, new Color(0.9f, 0.9f, 0.9f)); // beyaz: hedef hız
 
         texError.Apply(); texControl.Apply(); texPath.Apply(); texSpeed.Apply();
+
+        // UV kaydırma ile grafiği hareket ettir (FPS düşüşünü engeller)
+        float uvOffset = (cursorX >= gw) ? ((drawX + 1) / (float)gw) : 0f;
+        Rect uv = new Rect(uvOffset, 0, 1, 1);
+        if (imgError != null) imgError.uvRect = uv;
+        if (imgControl != null) imgControl.uvRect = uv;
+        if (imgPath != null) imgPath.uvRect = uv;
+        if (imgSpeed != null) imgSpeed.uvRect = uv;
 
         // Hız bilgi etiketi güncelle
         if (speedLabel != null)
             speedLabel.text = $"Gerçek: {actualSpeed:F1} m/s | Hedef: {tgtSpeed:F1} m/s | Eğrilik: {carTracker.currentCurvature:F3}";
+
+        if (massLabel != null)
+            massLabel.text = $"Kütle: {carTracker.vehicleMass:F0} kg | Faktör: {(carTracker.vehicleMass / carTracker.referenceMass):F2}x";
 
         cursorX++;
     }
@@ -380,18 +448,13 @@ public class UIGraphManager : MonoBehaviour
         }
     }
 
-    void ShiftLeft(Texture2D t)
+    void ClearColumn(Texture2D t, int x)
     {
-        Color[] px = t.GetPixels();
-        Color[] shifted = new Color[gw * gh];
         for (int y = 0; y < gh; y++)
         {
-            for (int x = 1; x < gw; x++)
-                shifted[y * gw + (x - 1)] = px[y * gw + x];
             Color bg2 = (y == gh / 2) ? new Color(0.35f, 0.35f, 0.35f) : new Color(0.05f, 0.05f, 0.1f, 0.9f);
-            shifted[y * gw + (gw - 1)] = bg2;
+            t.SetPixel(x, y, bg2);
         }
-        t.SetPixels(shifted);
     }
 
     Texture2D NewTex()
@@ -699,6 +762,38 @@ public class UIGraphManager : MonoBehaviour
             autoBrakeImg.color = isOn ? new Color(0.1f, 0.55f, 0.15f) : new Color(0.5f, 0.2f, 0.1f);
         if (autoBrakeTxt != null)
             autoBrakeTxt.text = isOn ? "🟢  Viraj Freni: AÇIK" : "🔴  Viraj Freni: KAPALI";
+    }
+
+    void BuildRestartButton(Transform parent, Vector2 pos, Vector2 size)
+    {
+        var go = new GameObject("RestartBtn");
+        go.transform.SetParent(parent, false);
+        var img = go.AddComponent<Image>();
+        img.color = new Color(0.15f, 0.45f, 0.7f);
+        var rt = go.GetComponent<RectTransform>();
+        rt.anchorMin = new Vector2(0, 1); rt.anchorMax = new Vector2(0, 1);
+        rt.pivot = new Vector2(0, 1);
+        rt.anchoredPosition = pos; rt.sizeDelta = size;
+
+        var txtGo = new GameObject("Txt"); txtGo.transform.SetParent(go.transform, false);
+        var txt = txtGo.AddComponent<Text>();
+        txt.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+        txt.fontSize = 16; txt.fontStyle = FontStyle.Bold;
+        txt.color = Color.white;
+        txt.text = "🔄  YENİDEN BAŞLAT";
+        txt.alignment = TextAnchor.MiddleCenter;
+        var trt = txtGo.GetComponent<RectTransform>();
+        trt.anchorMin = Vector2.zero; trt.anchorMax = Vector2.one; trt.sizeDelta = Vector2.zero;
+
+        var btn = go.AddComponent<Button>();
+        btn.targetGraphic = img;
+        btn.onClick.AddListener(() => {
+            if (carTracker != null)
+            {
+                carTracker.RestartSimulation();
+                ClearGraphs();
+            }
+        });
     }
 
     #endregion
