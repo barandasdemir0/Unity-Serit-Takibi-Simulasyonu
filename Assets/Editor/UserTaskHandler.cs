@@ -283,8 +283,8 @@ public class UserTaskHandler {
                 // 6. UI GRAFİK YÖNETİCİSİNİ EKLE
                 GameObject uiManagerObj = GameObject.Find("UIGraphSystem");
                 if (uiManagerObj == null) uiManagerObj = new GameObject("UIGraphSystem");
-                UIGraphManager uiManager = uiManagerObj.GetComponent<UIGraphManager>();
-                if (uiManager == null) uiManager = uiManagerObj.AddComponent<UIGraphManager>();
+                SimulationUIController uiManager = uiManagerObj.GetComponent<SimulationUIController>();
+                if (uiManager == null) uiManager = uiManagerObj.AddComponent<SimulationUIController>();
                 uiManager.carTracker = tracker;
 
                 Debug.Log("Görsellik artırıldı, ağaçlar eklendi, gökyüzü iyileştirildi ve yol kesişimleri düzeltildi.");

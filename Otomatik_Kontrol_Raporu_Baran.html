@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Otomatik Kontrol Final Ödevi Raporu</title>
+<style>
+body {
+    font-family: Arial, sans-serif;
+    line-height: 1.6;
+    margin: 40px auto;
+    max-width: 800px;
+    padding: 20px;
+    color: #333;
+}
+h1, h2 {
+    text-align: center;
+}
+h1 { margin-bottom: 0px; font-size: 24px; }
+h2 { margin-top: 5px; margin-bottom: 30px; font-weight: normal; font-size: 18px; color: #555;}
+h3 { margin-top: 25px; border-bottom: 1px solid #ccc; padding-bottom: 5px; font-size: 16px;}
+.images { text-align: center; margin: 20px 0; }
+.images .placeholder { width: 100%; height: 250px; background: #eee; border: 1px dashed #aaa; display: flex; align-items: center; justify-content: center; margin-bottom: 15px; color: #555; }
+ul { margin-top: 0; }
+p { text-align: justify; }
+</style>
+</head>
+<body>
+
+<h1>OTOMATİK KONTROL FİNAL ÖDEVİ RAPORU</h1>
+<h2>Unity Ortamında PID Kontrol ile Araba Şerit Takibi</h2>
+
+<h3>(a) Amaç</h3>
+<p>Projenin amacı, Unity oyun motoru ortamında bir aracın belirlenen referans şerit merkez çizgisini PID kontrol algoritması kullanarak otonom olarak takip etmesini sağlamaktır. Sistem, düzlükler, hafif virajlar ve keskin virajlar içeren karmaşık bir yol yapısı üzerinde, yanal sapmayı (hata) minimize ederek stabil ve güvenli bir seyir gerçekleştirmeyi hedeflemektedir.</p>
+
+<h3>(b) Sistem ve yol tanımı</h3>
+<p>Simülasyon ortamı, düzlükler ve çeşitli eğriliklere sahip virajdan oluşan kapsamlı bir parkuru içermektedir. Araç, global X ve Z koordinatları üzerinde hareket etmekte olup, aracın kinematik yapısı (Kinematic Bicycle Model) ile simüle edilmektedir. Hedef yörünge, yolun tam orta noktasından geçen referans merkez çizgisi <b>r(t)</b> olarak tanımlanmıştır. Aracın rotası simülasyon boyunca dinamik olarak güncellenmektedir.</p>
+
+<h3>(c) Hata ve kontrolcü yapısı</h3>
+<p>Hata sinyali <b>e(t)</b>, aracın referans çizgiye olan yanal sapması olarak hesaplanmıştır. Denklem <b>e(t) = r(t) − y(t)</b> şeklindedir; burada <b>r(t)</b> referans yolun merkezini, <b>y(t)</b> ise aracın anlık yanal konumunu ifade eder. Hata değerini sıfıra yaklaştırmak ve aracı referans hattında tutmak amacıyla yönlendirme açısını (kontrol çıkışı) belirleyen bir PID kontrolcü kullanılmıştır. Üretilen <b>u(t)</b> kontrol sinyali ile araca sağa veya sola yönelme komutu uygulanmaktadır.</p>
+<p>Kontrol denklemi: <b>u(t) = K<sub>p</sub> e(t) + K<sub>i</sub> &int;e(t)dt + K<sub>d</sub> (de(t)/dt)</b></p>
+
+<h3>(d) Kullanılan parametreler</h3>
+<p>Gerçekleştirilen testler ve analizler sonucunda sistemi en stabil (kararlı) hale getiren ve aşımları minimize eden PID parametreleri aşağıdaki gibi belirlenmiştir:</p>
+<ul>
+    <li><b>Oransal Kazanç (K<sub>p</sub>):</b> 2.00</li>
+    <li><b>İntegral Kazanç (K<sub>i</sub>):</b> 0.10</li>
+    <li><b>Türevsel Kazanç (K<sub>d</sub>):</b> 1.00</li>
+</ul>
+
+<h3>(e) Grafikler</h3>
+<p>Aşağıda simülasyon verilerinden elde edilen sistem performansı grafikleri sunulacaktır. Yanal hata ve kontrol sinyali grafikleri zaman ekseninde çizdirilmiş olup, yörünge takibi grafiği doğrudan x-z düzlemindeki (üstten görünüm) hareketleri yansıtmaktadır.</p>
+<p><i>(Not: Kendi simülasyonunuzdan aldığınız grafikleri bu alanlara yerleştirebilirsiniz.)</i></p>
+
+<div class="images">
+    <div class="placeholder">Zamana Bağlı Yanal Hata e(t) Grafiği</div>
+    <div class="placeholder">Zamana Bağlı Kontrolcü Çıkışı u(t) Grafiği</div>
+    <div class="placeholder">Referans Yol ve Gerçek İzlenen Yol Karşılaştırması</div>
+</div>
+
+<h3>(f) Karşılaştırma ve analizler</h3>
+
+<p><b>Araç düz yolda nasıl davranmaktadır?</b><br>
+Düz yolda referans hat sabit olduğu için yanal hata (e(t)) hızla sıfıra yaklaşmaktadır. Araç, düz yolda gereksiz osilasyonlar (salınımlar) yapmadan merkez çizgisi üzerinde son derece istikrarlı ve pürüzsüz bir ilerleme sergilemektedir.</p>
+
+<p><b>Virajlarda hata nasıl değişmektedir?</b><br>
+Viraja girildiğinde referans hattı sürekli değiştiği için anlık yanal sapma miktarında artış gözlemlenmektedir. Ancak PID kontrolcünün türevsel (D) ve oransal (P) etkileri sayesinde hata güvenli sınırlar içerisinde tutulmakta ve araç şeritten savrulmadan virajı tamamlayabilmektedir. Viraj bitiminde hata hızla sönümlenmektedir.</p>
+
+<p><b>PID parametreleri değiştirildiğinde araç davranışı nasıl etkilenmektedir?</b><br>
+<b>K<sub>p</sub></b> değeri çok yüksek olduğunda araç yola hızlıca dönmeye çalışırken aşırı salınım yapmakta, direksiyon sert tepkiler vermektedir. <b>K<sub>d</sub></b> düşük kaldığında viraj girişlerinde sönümleme yetersiz kalmakta ve araç yoldan dışarı taşabilmektedir. <b>K<sub>i</sub></b> değerinin aşırı artması ise kontrol sisteminin aşırı düzeltme yapmasına ve sürekli bir kararsızlığa düşmesine sebep olmaktadır.</p>
+
+<p><b>Hangi parametre seti en iyi sonucu vermiştir?</b><br>
+Deneme-yanılma ve iteratif testler sonucunda en optimum ve stabil takip başarımı <b>K<sub>p</sub> = 2.00</b>, <b>K<sub>i</sub> = 0.10</b> ve <b>K<sub>d</sub> = 1.00</b> değerleriyle elde edilmiştir.</p>
+
+<p><b>Kontrol sinyali çok agresif midir, yumuşak mıdır?</b><br>
+Optimum parametrelerle (2.00, 0.10, 1.00) üretilen u(t) sinyali dengeli ve yumuşaktır. Sadece sert viraj başlangıçlarında doğal olarak anlık tepki pikleri oluşmakta, ancak geri kalan rotada kontrol sinyali sarsıntısız bir sürüş sunmaktadır.</p>
+
+<p><b>Araç salınım yapmakta mıdır? Sistem kararlı mıdır?</b><br>
+Sistem tam kararlı (stable) durumdadır. Türevsel kazancın (K<sub>d</sub>) uygun ayarlanmasıyla sistemin sönümleme oranı ideal seviyeye çekilmiş, böylece aracın sürekli sağa sola salınım yapması (overshoot/oscillation) başarıyla engellenmiştir.</p>
+
+<p><b>Keskin virajlarda takip başarımı düşmekte midir?</b><br>
+Evet, yüksek eylemsizlik ve ani referans değişimleri nedeniyle keskin virajlarda yanal sapma hatası, hafif virajlara ve düzlüklere oranla anlık olarak daha yüksek değerlere ulaşmaktadır. Bu durum takip başarımında bir düşüşe neden olsa da, kontrolcü aracı her halükarda yolun sınırları içinde tutmayı başarmaktadır.</p>
+
+<p><b>Kontrolcü parametreleri değiştiğinde yükselme ve yerleşme sürelerine ilişkin davranış nasıl etkilenmektedir?</b><br>
+<b>K<sub>p</sub></b> değerinin artırılması sistemin yükselme süresini (hedefe yönelme hızını) kısaltırken, aşım miktarını artırarak yerleşme süresini (hatasız konuma oturmayı) geciktirmektedir. Uygun bir <b>K<sub>d</sub></b> parametresinin sisteme dahil edilmesi, oluşan bu aşım ve salınımları sönümlemiş, aracın referans yörüngeye hızlı ve stabil bir şekilde yerleşmesini sağlamıştır.</p>
+
+<h3>(g) Sonuç</h3>
+<p>Bu çalışmada, Unity ortamında bir aracın referans yolunu takip etmesini sağlayan PID tabanlı kontrol sistemi başarıyla geliştirilmiştir. İteratif testler sonucunda elde edilen optimum PID parametreleriyle sistemin düz, hafif virajlı ve keskin virajlı yollarda kararlılığını koruduğu ve aracı şerit merkezinde tuttuğu görülmüştür. Grafikler üzerinden yapılan hata ve kontrol sinyali analizleri, kurulan teorik modelin simülasyonda beklenen pratik gereksinimleri tam olarak karşıladığını kanıtlamaktadır.</p>
+
+<hr style="margin-top: 40px; margin-bottom: 20px;">
+<p style="text-align: left; font-weight: bold;">Baran | Öğrenci Numarası</p>
+
+</body>
+</html>

@@ -1,83 +1,85 @@
 using UnityEngine;
-using System.Collections.Generic;
-using System.IO;
 using System.Text;
+using System.Collections.Generic;
 
+/// <summary>
+/// Araç verilerini CSV dosyasına dışa aktarmak için toplayan kayıt (Logger) modülü.
+/// BAĞLANTI: CarLaneTracker.cs tarafından belirli aralıklarla tetiklenir.
+/// Verileri diskteki CSV dosyasına yazmak için FileIOService.cs'i kullanır.
+/// </summary>
 public class DataLogger : MonoBehaviour
 {
-    private struct LogEntry
+    // Verilerin hangi sıklıkla kaydedileceği (Örn: 0.1 saniye = Saniyede 10 kayıt)
+    public float logInterval = 0.1f;
+    
+    // Bir sonraki kaydın alınacağı zaman
+    private float _nextLogTime = 0f;
+    
+    // Dışa aktarılacak CSV verilerini biriktirdiğimiz liste
+    private List<CarDataRecorder.FrameData> _csvData = new List<CarDataRecorder.FrameData>();
+    
+    // CSV dosyasının kaydedileceği klasör yolu
+    public string folderPath = "C:/SimulasyonVerileri";
+    
+    // CSV dosyasının adı
+    public string fileName = "SeritTakibi";
+
+    /// <summary>
+    /// Eğer zamanı geldiyse o anki durumu CSV için biriktirilen listeye ekler.
+    /// BAĞLANTI: CarLaneTracker.cs FixedUpdate'inden her kare çağrılır ama sadece logInterval dolduğunda kayıt alır.
+    /// </summary>
+    public void LogData(CarLaneTracker tracker)
     {
-        public float time;
-        public float error;        // e(t)
-        public float controlSignal; // u(t)
-        public Vector3 carPos;     // y(t) — araç konumu
-        public Vector3 refPos;     // r(t) — referans konumu
-        public string mode;        // P / PI / PID
-        public float speed;        // v(t) — anlık hız
-        public float targetSpeed;  // hedef hız
-    }
+        // Eğer araç takipçisi (tracker) yoksa veya kaydedilmiş hiç veri yoksa çık
+        if (tracker == null || tracker.Recorder.RecordedData.Count == 0) return;
 
-    private List<LogEntry> logs = new List<LogEntry>();
-    private float startTime;
-
-    [Header("Ayarlar")]
-    public float logInterval = 0.05f; // 20 Hz kayıt
-    private float nextLogTime = 0f;
-
-    [Tooltip("Masaüstüne kaydedilecek dosya adı.")]
-    public string fileName = "PID_Sonuclari.csv";
-
-    void Start()
-    {
-        startTime = Time.time;
-    }
-
-    public void LogData(float error, float controlSignal, Vector3 carPosition, Vector3 referencePosition, string controllerMode = "PID", float speed = 0f, float targetSpeed = 0f)
-    {
-        if (Time.time >= nextLogTime)
+        // Belirlenen kayıt aralığı (logInterval) süresi dolmuşsa
+        if (Time.time >= _nextLogTime)
         {
-            logs.Add(new LogEntry
-            {
-                time = Time.time - startTime,
-                error = error,
-                controlSignal = controlSignal,
-                carPos = carPosition,
-                refPos = referencePosition,
-                mode = controllerMode,
-                speed = speed,
-                targetSpeed = targetSpeed
-            });
-            nextLogTime = Time.time + logInterval;
+            // O anki en son frame'i (kaydı) alıp CSV listemize ekliyoruz
+            var data = tracker.Recorder.RecordedData;
+            _csvData.Add(data[data.Count - 1]);
+            
+            // Bir sonraki kayıt zamanını belirle
+            _nextLogTime = Time.time + logInterval;
         }
     }
 
-    void OnApplicationQuit()
+    /// <summary>
+    /// Biriktirilen tüm verileri virgülle ayrılmış (CSV) metin formatına çevirip dışa aktarır.
+    /// BAĞLANTI: CSVExportUIManager.cs tarafından (Butona basılınca) tetiklenir.
+    /// </summary>
+    public void ExportData()
     {
-        SaveToCSV();
-    }
+        // Kaydedilecek veri yoksa boşuna dosya oluşturma
+        if (_csvData.Count == 0) return;
 
-    public void SaveToCSV()
-    {
-        if (logs.Count == 0) return;
-
-        string desktopPath = System.Environment.GetFolderPath(System.Environment.SpecialFolder.Desktop);
-        string fullPath = Path.Combine(desktopPath, fileName);
-
+        // Bellek (RAM) verimliliği için metinleri StringBuilder ile birleştiriyoruz
         StringBuilder sb = new StringBuilder();
-        sb.AppendLine("Zaman(s);Mod;Hata_e(t);Kontrol_u(t);Arac_X;Arac_Z;Referans_X;Referans_Z;Hiz(m/s);HedefHiz(m/s)");
+        
+        // CSV Sütun başlıkları (İlk satır)
+        sb.AppendLine("Zaman(s),Yanal Hata(m),Kontrol Cikisi(u),Arac X,Referans X,P Terimi,I Terimi,D Terimi,Direksiyon Acisi,GlobalAracX,GlobalAracZ,GlobalHedefX,GlobalHedefZ");
 
-        foreach (var log in logs)
+        // Listemizdeki her bir kaydı sırayla dön
+        foreach (var d in _csvData)
         {
-            string line = string.Format(System.Globalization.CultureInfo.InvariantCulture,
-                "{0:F3};{1};{2:F4};{3:F4};{4:F3};{5:F3};{6:F3};{7:F3};{8:F2};{9:F2}",
-                log.time, log.mode, log.error, log.controlSignal,
-                log.carPos.x, log.carPos.z,
-                log.refPos.x, log.refPos.z,
-                log.speed, log.targetSpeed);
-            sb.AppendLine(line);
+            // Verileri virgüllerle ayırarak (F3 = 3 ondalıklı format vs.) birleştir ve alt satıra geç
+            sb.AppendLine($"{d.time:F3},{d.lateralError:F4},{d.controlOutput:F4},{d.vehiclePosX:F4},{d.referencePosX:F4},{d.pTerm:F4},{d.iTerm:F4},{d.dTerm:F4},{d.steeringAngle:F2},{d.vehicleGlobalX:F2},{d.vehicleGlobalZ:F2},{d.targetGlobalX:F2},{d.targetGlobalZ:F2}");
         }
 
-        File.WriteAllText(fullPath, sb.ToString(), Encoding.UTF8);
-        Debug.Log("PID Verileri Kaydedildi: " + fullPath + " (" + logs.Count + " satır)");
+        // Dosya isminin sonuna anlık Saat ve Tarihi ekle ki eski dosyaların üstüne yazmasın
+        string fullFileName = $"{fileName}_{System.DateTime.Now:yyyy-MM-dd_HH-mm-ss}.csv";
+        
+        // BAĞLANTI: Oluşturulan koca metni (sb.ToString()) diske yazması için servise gönder.
+        FileIOService.SaveToFile(folderPath, fullFileName, sb.ToString());
+    }
+
+    /// <summary>
+    /// Geçmiş CSV verilerini temizler (Simülasyon sıfırlandığında).
+    /// </summary>
+    public void ClearData()
+    {
+        _csvData.Clear();
+        _nextLogTime = Time.time;
     }
 }

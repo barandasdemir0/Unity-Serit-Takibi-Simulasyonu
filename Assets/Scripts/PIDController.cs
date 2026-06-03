@@ -1,65 +1,90 @@
 using UnityEngine;
 
+/// <summary>
+/// Şerit takibi için ana PID (Proportional-Integral-Derivative) Kontrolcü sınıfı.
+/// BAĞLANTI: Bu sınıf matematiksel işlemlerin sadece toplanma (sum) noktasıdır.
+/// İşlemleri kendi içindeki 3 ayrı modüle (ProportionalTerm, IntegralTerm, DerivativeTerm) devreder.
+/// </summary>
 [System.Serializable]
 public class PIDController
 {
-    public enum ControllerMode { P, PI, PID }
+    // Arayüzden seçilebilen P, PI veya PID modları
+    public enum ControllerMode { P_Only, PI_Only, PID }
 
-    [Header("Kontrolcü Modu (P / PI / PID)")]
+    [Header("Kontrolcü Modu")]
     public ControllerMode mode = ControllerMode.PID;
 
-    [Header("PID Katsayıları")]
-    public float Kp = 5f;
-    public float Ki = 0f;
-    public float Kd = 3f;
+    // Kullanıcı arayüzünden (PIDSettingsUIManager.cs) gelen Kp, Ki, Kd çarpanları
+    [Header("PID Kazanç Değerleri")]
+    [Range(0f, 20f)] public float Kp = 1.2f;
+    [Range(0f, 5f)]  public float Ki = 0.3f;
+    [Range(0f, 10f)] public float Kd = 2.5f;
 
-    // Integral sınırı (Integral Windup önlemi)
-    public float maxIntegral = 10f;
+    // İntegral şişmesini engelleyen Windup limiti ve maksimum direksiyon çıkış limiti
+    [Header("Sınırlar")]
+    public float integralMax = 10f;
+    public float outputMax = 1f;
 
-    private float integral = 0f;
-    private float previousError = 0f;
-    private float previousDerivative = 0f;
+    // --- ATOMİK ALT MODÜLLER (Matematik İşlemleri Burada Yapılır) ---
+    private ProportionalTerm _pTerm = new ProportionalTerm();
+    private IntegralTerm _iTerm = new IntegralTerm();
+    private DerivativeTerm _dTerm = new DerivativeTerm();
+
+    // Dışarıdan (GraphRenderer.cs ve DataLogger.cs tarafından) okunabilen salt-okunur veriler
+    public float LastError { get; private set; }
+    public float LastProportional { get; private set; }
+    public float LastIntegral { get; private set; }
+    public float LastDerivative { get; private set; }
+    public float LastOutput { get; private set; }
 
     /// <summary>
-    /// Kontrol sinyalini (u(t)) hesaplayan ana fonksiyon.
-    /// u(t) = Kp*e(t) + Ki*∫e(t)dt + Kd*(de(t)/dt)
+    /// Başlangıçta tüm değerleri sıfırlar.
     /// </summary>
-    public float CalculateControlSignal(float error, float deltaTime)
+    public PIDController() { Reset(); }
+
+    /// <summary>
+    /// Sistem yeniden başlatıldığında veya PID modu değiştiğinde geçmişi temizler.
+    /// </summary>
+    public void Reset()
     {
-        if (deltaTime <= 0f) return 0f;
-
-        // Oransal (Proportional) terim: Kp * e(t)
-        float P = Kp * error;
-
-        // İntegral terimi (sadece PI ve PID modunda aktif)
-        float I = 0f;
-        if (mode == ControllerMode.PI || mode == ControllerMode.PID)
-        {
-            integral += error * deltaTime;
-            integral = Mathf.Clamp(integral, -maxIntegral, maxIntegral);
-            I = Ki * integral;
-        }
-
-        // Türevsel terimi (sadece PID modunda aktif)
-        float D = 0f;
-        if (mode == ControllerMode.PID)
-        {
-            float rawDerivative = (error - previousError) / deltaTime;
-            // Alçak geçiren filtre: gürültüyü bastırır, alpha=0.5 → hızlı tepki
-            previousDerivative = Mathf.Lerp(previousDerivative, rawDerivative, 0.5f);
-            D = Kd * previousDerivative;
-        }
-
-        previousError = error;
-
-        // u(t) = P + I + D
-        return P + I + D;
+        _iTerm.Reset();
+        _dTerm.Reset();
+        LastError = LastProportional = LastIntegral = LastDerivative = LastOutput = 0f;
     }
 
-    public void ResetController()
+    /// <summary>
+    /// Mevcut yanal hatayı (error) alıp, verilmesi gereken direksiyon miktarını (output) üretir.
+    /// BAĞLANTI: CarLaneTracker.cs tarafından her karede çağrılır.
+    /// </summary>
+    public float Compute(float error, float deltaTime)
     {
-        integral = 0f;
-        previousError = 0f;
-        previousDerivative = 0f;
+        if (deltaTime <= 0f) return LastOutput;
+        
+        LastError = error;
+
+        // 1. P TERİMİ: Mevcut hataya anında verilen oransal tepki.
+        LastProportional = _pTerm.Calculate(Kp, error);
+
+        // 2. I TERİMİ: Geçmiş hataların zamanla birikimi (Kalıcı hatayı yok eder).
+        // Eğer mod "P_Only" ise integral hesabı yapılmaz.
+        if (mode == ControllerMode.PI_Only || mode == ControllerMode.PID)
+            LastIntegral = _iTerm.Calculate(Ki, error, deltaTime, integralMax);
+        else
+            LastIntegral = 0f;
+
+        // 3. D TERİMİ: Hatanın değişim hızını (türevini) ölçerek salınımı engeller.
+        // Eğer mod PID değilse türev hesabı yapılmaz. (10f = Low Pass Filter frekansı)
+        if (mode == ControllerMode.PID)
+            LastDerivative = _dTerm.Calculate(Kd, error, deltaTime, 10f);
+        else
+            LastDerivative = 0f;
+
+        // Toplam Kontrol Sinyali: u(t) = P + I + D
+        float output = LastProportional + LastIntegral + LastDerivative;
+        
+        // Çıkışı fiziksel [-outputMax, outputMax] aralığına sıkıştır (Örn: -1 ile +1 arası)
+        LastOutput = Mathf.Clamp(output, -outputMax, outputMax);
+
+        return LastOutput;
     }
 }
